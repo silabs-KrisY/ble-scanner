@@ -83,8 +83,11 @@ int main()
 	le_set_scan_parameters_cp scan_params_cp;
 	memset(&scan_params_cp, 0, sizeof(scan_params_cp));
 	scan_params_cp.type 			= 0x00;
-	scan_params_cp.interval 		= htobs(0x0010);
-	scan_params_cp.window 			= htobs(0x0010);
+	//scan_params_cp.interval 		= htobs(0x0010);
+	//scan_params_cp.window 			= htobs(0x0010);
+        scan_params_cp.interval                 = htobs(0x00640); //1 sec
+        scan_params_cp.window                   = htobs(0x00A0); //100ms
+
 	scan_params_cp.own_bdaddr_type 	= 0x00; // Public Device Address (default).
 	scan_params_cp.filter 			= 0x00; // Accept all.
 
