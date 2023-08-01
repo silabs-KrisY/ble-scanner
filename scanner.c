@@ -77,6 +77,18 @@ int main()
 		perror("Failed to open HCI device.");
 		return 0;
 	}
+        // Reset device
+        struct hci_request reset_rq;
+      	memset(&reset_rq,0,sizeof(reset_rq));
+	reset_rq.ogf = OGF_HOST_CTL;
+	reset_rq.ocf = OCF_RESET;
+	reset_rq.rparam = &status;
+	reset_rq.rlen=1;
+        ret = hci_send_req(device,&reset_rq,1000);
+        if (ret < 0 ) {
+           perror("Failed to reset.");
+           return 0;
+        }
 
 	// Set BLE scan parameters.
 
