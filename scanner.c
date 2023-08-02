@@ -68,7 +68,7 @@ int main(int argc, char **argv)
         bool target_bdaddr_flag=false;
 	int interval=SCAN_INTERVAL_DEFAULT;
 	int window=SCAN_WINDOW_DEFAULT;
-        int active_scan=0; //default to passive scan
+	int active_scan=0; //default to passive scan
 	int c;
 	struct timeval stop, start;
 
