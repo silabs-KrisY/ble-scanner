@@ -12,8 +12,9 @@
 #include <bluetooth/bluetooth.h>
 #include <bluetooth/hci.h>
 #include <bluetooth/hci_lib.h>
-#include <time.h>
+#include <sys/time.h>
 #include <getopt.h>
+#include <stdbool.h>
 
 #define SCAN_INTERVAL_DEFAULT 0x0010 //10ms (units of 0.625ms)
 #define SCAN_WINDOW_DEFAULT 0x0010 //10ms (units of 0.625ms)
@@ -64,14 +65,15 @@ int main(int argc, char **argv)
 {
 	int ret, status;
 	bdaddr_t target_bdaddr;
+        bool target_bdaddr_flag=false;
 	int interval=SCAN_INTERVAL_DEFAULT;
 	int window=SCAN_WINDOW_DEFAULT;
 	int c;
+	struct timeval stop, start;
 
-	// parse args
-	while ((c = getopt(argc,argv,"i:w:m:")) != -1)
+	// parse args for interval, window, and addr
+	while ((c = getopt(argc,argv,"i:w:a:")) != -1)
 	{
-	    printf("c=0x%x\r\n",c);
             switch (c)
 	    {
 	        case 'i':
@@ -91,6 +93,7 @@ int main(int argc, char **argv)
                         char addr[18];
                         ba2str(&target_bdaddr, addr);
                         printf("target addr: %s\r\n", addr);
+                        target_bdaddr_flag=true;
                     }
                     break;
               }
@@ -114,7 +117,9 @@ int main(int argc, char **argv)
 		perror("Failed to open HCI device.");
 		return 0;
 	}
+
         // Reset device
+
         struct hci_request reset_rq;
       	memset(&reset_rq,0,sizeof(reset_rq));
 	reset_rq.ogf = OGF_HOST_CTL;
@@ -132,14 +137,11 @@ int main(int argc, char **argv)
 	le_set_scan_parameters_cp scan_params_cp;
 	memset(&scan_params_cp, 0, sizeof(scan_params_cp));
 	scan_params_cp.type 			= 0x00;
-	//scan_params_cp.interval 		= htobs(0x0010);
-	//scan_params_cp.window 			= htobs(0xd0010);
         scan_params_cp.interval                 = htobs(interval);
         scan_params_cp.window                   = htobs(window);
 
 	scan_params_cp.own_bdaddr_type 	= 0x00; // Public Device Address (default).
 	scan_params_cp.filter 			= 0x00; // Accept all.
-        printf("interval=0x%2x,window=0x%2x\r\n",scan_params_cp.interval, scan_params_cp.window);
 
 	struct hci_request scan_params_rq = ble_hci_request(OCF_LE_SET_SCAN_PARAMETERS, LE_SET_SCAN_PARAMETERS_CP_SIZE, &status, &scan_params_cp);
 
@@ -180,6 +182,7 @@ int main(int argc, char **argv)
 		perror("Failed to enable scan.");
 		return 0;
 	}
+	gettimeofday(&start, NULL); //record timestamp
 
 	// Get Results.
 
@@ -199,6 +202,7 @@ int main(int argc, char **argv)
 	le_advertising_info * info;
 	int len;
 	int count = 0;
+        bool exit_while=false;
 
 	const int timeout = 10;
 	const int reset_timeout = 1; // wether to reset the timer on a received scan event (continuous scanning)
@@ -227,7 +231,7 @@ int main(int argc, char **argv)
 
 	// Keep scanning until the timeout is triggered or we have seen lots of advertisements.  Then exit.
 	// We exit in this case because the scan may have failed or stopped. Higher level code can restart
-	while ( count < max_count || max_count <= 0 )
+	while (( count < max_count || max_count <= 0 ) && (exit_while == false))
 	{
 		len = read(device, buf, sizeof(buf));
 		if ( len >= HCI_EVENT_HDR_SIZE )
@@ -244,15 +248,28 @@ int main(int argc, char **argv)
 				void * offset = meta_event->data + 1;
 				while ( reports_count-- )
 				{
-					info = (le_advertising_info *)offset;
-					char addr[18];
-					ba2str( &(info->bdaddr), addr);
-					printf("%s %d", addr, (int8_t)info->data[info->length]);
-					for (int i = 0; i < info->length; i++)
+                                        info = (le_advertising_info *)offset;
+                                        if (target_bdaddr_flag==false) {
+					    char addr[18];
+					    ba2str( &(info->bdaddr), addr);
+					    printf("%s %d", addr, (int8_t)info->data[info->length]);
+					    for (int i = 0; i < info->length; i++)
 						printf(" %02X", (unsigned char)info->data[i]);
-					printf("\n");
-					offset = info->data + info->length + 2;
-				}
+					    printf("\n");
+					    offset = info->data + info->length + 2;
+				        } else {
+                                            // look for target bdaddr and exit with timestamp when found
+                                            if (bacmp(&(info->bdaddr),&target_bdaddr) != 0) 
+                                            {
+                                               gettimeofday(&stop, NULL);
+                                               printf("target bdaddr found after %lu ms\r\n", (stop.tv_sec - start.tv_sec) * 1000 + (int)((stop.tv_usec - start.tv_usec) / 1000));
+                                               exit_while = true;
+                                               break;
+                                             } else {
+                                                printf("debug\r\n");
+                                             }
+                                         }
+                                }
 			}
 		}
 	}
