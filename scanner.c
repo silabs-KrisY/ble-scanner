@@ -68,11 +68,12 @@ int main(int argc, char **argv)
         bool target_bdaddr_flag=false;
 	int interval=SCAN_INTERVAL_DEFAULT;
 	int window=SCAN_WINDOW_DEFAULT;
+        int active_scan=0; //default to passive scan
 	int c;
 	struct timeval stop, start;
 
 	// parse args for interval, window, and addr
-	while ((c = getopt(argc,argv,"i:w:a:")) != -1)
+	while ((c = getopt(argc,argv,"i:w:m:a")) != -1)
 	{
             switch (c)
 	    {
@@ -84,7 +85,7 @@ int main(int argc, char **argv)
 		    window = atoi(optarg);
                     printf("window=%d ms\r\n", (int)(window*0.625));
                     break;
-                 case 'a':
+                 case 'm':
 		    status==str2ba(optarg,&target_bdaddr);
                     if (status < 0) {
                         perror("error in bdaddr conversion!");
@@ -95,6 +96,10 @@ int main(int argc, char **argv)
                         printf("target addr: %s\r\n", addr);
                         target_bdaddr_flag=true;
                     }
+                    break;
+                  case 'a':
+                    active_scan=0x01; //select active scan
+                    printf("performing active scan\r\n");
                     break;
               }
           }
@@ -136,7 +141,7 @@ int main(int argc, char **argv)
 
 	le_set_scan_parameters_cp scan_params_cp;
 	memset(&scan_params_cp, 0, sizeof(scan_params_cp));
-	scan_params_cp.type 			= 0x00;
+	scan_params_cp.type 			= active_scan;
         scan_params_cp.interval                 = htobs(interval);
         scan_params_cp.window                   = htobs(window);
 
@@ -265,9 +270,7 @@ int main(int argc, char **argv)
                                                printf("target bdaddr found after %lu ms\r\n", (stop.tv_sec - start.tv_sec) * 1000 + (int)((stop.tv_usec - start.tv_usec) / 1000));
                                                exit_while = true;
                                                break;
-                                             } else {
-                                                printf("debug\r\n");
-                                             }
+                                             } 
                                          }
                                 }
 			}
