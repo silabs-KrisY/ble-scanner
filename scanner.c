@@ -13,6 +13,10 @@
 #include <bluetooth/hci.h>
 #include <bluetooth/hci_lib.h>
 #include <time.h>
+#include <getopt.h>
+
+#define SCAN_INTERVAL_DEFAULT 0x0010 //10ms (units of 0.625ms)
+#define SCAN_WINDOW_DEFAULT 0x0010 //10ms (units of 0.625ms)
 
 int device;
 
@@ -52,13 +56,46 @@ void exit_clean()
 // handles timeout
 void signal_handler( int s )
 {
-	//printf( "received SIGALRM\n" );
+	printf( "received SIGALRM\n" );
 	exit_clean();
 }
 
-int main()
+int main(int argc, char **argv)
 {
 	int ret, status;
+	bdaddr_t target_bdaddr;
+	int interval=SCAN_INTERVAL_DEFAULT;
+	int window=SCAN_WINDOW_DEFAULT;
+	int c;
+
+	// parse args
+	while ((c = getopt(argc,argv,"i:w:m:")) != -1)
+	{
+	    printf("c=0x%x\r\n",c);
+            switch (c)
+	    {
+	        case 'i':
+		    interval = atoi(optarg);
+                    printf("interval=%d ms\r\n", (int)(interval*0.625));
+                    break;
+                case 'w':
+		    window = atoi(optarg);
+                    printf("window=%d ms\r\n", (int)(window*0.625));
+                    break;
+                 case 'a':
+		    status==str2ba(optarg,&target_bdaddr);
+                    if (status < 0) {
+                        perror("error in bdaddr conversion!");
+                        return 0;
+                    } else {
+                        char addr[18];
+                        ba2str(&target_bdaddr, addr);
+                        printf("target addr: %s\r\n", addr);
+                    }
+                    break;
+              }
+          }
+
 
 	// Get HCI device.
 
@@ -96,12 +133,13 @@ int main()
 	memset(&scan_params_cp, 0, sizeof(scan_params_cp));
 	scan_params_cp.type 			= 0x00;
 	//scan_params_cp.interval 		= htobs(0x0010);
-	//scan_params_cp.window 			= htobs(0x0010);
-        scan_params_cp.interval                 = htobs(0x00640); //1 sec
-        scan_params_cp.window                   = htobs(0x00A0); //100ms
+	//scan_params_cp.window 			= htobs(0xd0010);
+        scan_params_cp.interval                 = htobs(interval);
+        scan_params_cp.window                   = htobs(window);
 
 	scan_params_cp.own_bdaddr_type 	= 0x00; // Public Device Address (default).
 	scan_params_cp.filter 			= 0x00; // Accept all.
+        printf("interval=0x%2x,window=0x%2x\r\n",scan_params_cp.interval, scan_params_cp.window);
 
 	struct hci_request scan_params_rq = ble_hci_request(OCF_LE_SET_SCAN_PARAMETERS, LE_SET_SCAN_PARAMETERS_CP_SIZE, &status, &scan_params_cp);
 
