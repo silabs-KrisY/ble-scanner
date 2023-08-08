@@ -264,7 +264,7 @@ int main(int argc, char **argv)
 					    offset = info->data + info->length + 2;
 				        } else {
                                             // look for target bdaddr and exit with timestamp when found
-                                            if (bacmp(&(info->bdaddr),&target_bdaddr) != 0) 
+                                            if (bacmp(&(info->bdaddr),&target_bdaddr) == 0) 
                                             {
                                                gettimeofday(&stop, NULL);
                                                printf("target bdaddr found after %lu ms\r\n", (stop.tv_sec - start.tv_sec) * 1000 + (int)((stop.tv_usec - start.tv_usec) / 1000));
