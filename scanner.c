@@ -48,7 +48,7 @@ void exit_clean()
 	struct hci_request disable_adv_rq = ble_hci_request(OCF_LE_SET_SCAN_ENABLE, LE_SET_SCAN_ENABLE_CP_SIZE, &status, &scan_cp);
 	ret = hci_send_req(device, &disable_adv_rq, 1000);
 	if ( ret < 0 )
-		perror("Failed to disable scan.");
+		perror(" ERROR: Failed to disable scan.");
 
 	hci_close_dev(device);
 	exit( 0 );
@@ -88,7 +88,7 @@ int main(int argc, char **argv)
                  case 'm':
 		    status==str2ba(optarg,&target_bdaddr);
                     if (status < 0) {
-                        perror("error in bdaddr conversion!");
+                        perror(" ERROR: error in bdaddr conversion!");
                         return 0;
                     } else {
                         char addr[18];
@@ -119,7 +119,7 @@ int main(int argc, char **argv)
 	}
 
 	if ( device < 0 ) {
-		perror("Failed to open HCI device.");
+		perror(" ERROR: Failed to open HCI device.");
 		return 0;
 	}
 
@@ -133,7 +133,7 @@ int main(int argc, char **argv)
 	reset_rq.rlen=1;
         ret = hci_send_req(device,&reset_rq,1000);
         if (ret < 0 ) {
-           perror("Failed to reset.");
+           perror(" ERROR: Failed to reset.");
            return 0;
         }
 
@@ -153,7 +153,7 @@ int main(int argc, char **argv)
 	ret = hci_send_req(device, &scan_params_rq, 1000);
 	if ( ret < 0 ) {
 		hci_close_dev(device);
-		perror("Failed to set scan parameters data.");
+		perror(" ERROR: Failed to set scan parameters data.");
 		return 0;
 	}
 
@@ -168,7 +168,7 @@ int main(int argc, char **argv)
 	ret = hci_send_req(device, &set_mask_rq, 1000);
 	if ( ret < 0 ) {
 		hci_close_dev(device);
-		perror("Failed to set event mask.");
+		perror(" ERROR: Failed to set event mask.");
 		return 0;
 	}
 
@@ -184,7 +184,7 @@ int main(int argc, char **argv)
 	ret = hci_send_req(device, &enable_adv_rq, 1000);
 	if ( ret < 0 ) {
 		hci_close_dev(device);
-		perror("Failed to enable scan.");
+		perror(" ERROR: Failed to enable scan.");
 		return 0;
 	}
 	gettimeofday(&start, NULL); //record timestamp
@@ -197,7 +197,7 @@ int main(int argc, char **argv)
 	hci_filter_set_event(EVT_LE_META_EVENT, &nf);
 	if ( setsockopt(device, SOL_HCI, HCI_FILTER, &nf, sizeof(nf)) < 0 ) {
 		hci_close_dev(device);
-		perror("Could not set socket options\n");
+		perror(" ERROR: Could not set socket options\n");
 		return 0;
 	}
 
