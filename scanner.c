@@ -57,7 +57,8 @@ void exit_clean()
 // handles timeout
 void signal_handler( int s )
 {
-	printf( "received SIGALRM\n" );
+	printf( "Exiting..\n" );
+	fflush(stdout);
 	exit_clean();
 }
 
@@ -86,7 +87,7 @@ int main(int argc, char **argv)
                     printf("window=%d ms\r\n", (int)(window*0.625));
                     break;
                  case 'm':
-		    status==str2ba(optarg,&target_bdaddr);
+		    status=str2ba(optarg,&target_bdaddr);
                     if (status < 0) {
                         perror(" ERROR: error in bdaddr conversion!");
                         return 0;
@@ -117,6 +118,7 @@ int main(int argc, char **argv)
 	else {
    		printf("Using hci1\n");
 	}
+
 
 	if ( device < 0 ) {
 		perror(" ERROR: Failed to open HCI device.");
@@ -209,29 +211,33 @@ int main(int argc, char **argv)
 	int count = 0;
         bool exit_while=false;
 
-	const int timeout = 10;
+	//const int timeout = 10;
+	const int timeout = 0; // no timeout
 	const int reset_timeout = 1; // wether to reset the timer on a received scan event (continuous scanning)
-	const int max_count = 1000;
-
-	// Install a signal handler so that we can set the exit code and clean up
-	if ( signal( SIGALRM, signal_handler ) == SIG_ERR )
-	{
-		hci_close_dev(device);
-		perror( "Could not install signal handler\n" );
-		return 0;
-	}
-
-	if ( timeout > 0 )
-		alarm( timeout ); // set the alarm timer, when time is up the program will be terminated
+	//const int max_count = 1000;
+	const int max_count = -1; // no max count
 
 	sigset_t sigalrm_set; // apparently the signal must be unblocked in some cases
 	sigemptyset ( &sigalrm_set );
-	sigaddset ( &sigalrm_set, SIGALRM );
-	if ( sigprocmask( SIG_UNBLOCK, &sigalrm_set, NULL ) != 0 )
-	{
-		hci_close_dev(device);
-		perror( "Could not unblock alarm signal" );
-		return 0;
+        sigaddset ( &sigalrm_set, SIGALRM );
+
+	// if timeout is <= 0, don't worry about the SIGALRM/timeout
+	if ( timeout > 0 )
+	{	// Install a signal handler so that we can set the exit code and clean up
+        	if ( signal( SIGALRM, signal_handler ) == SIG_ERR )
+        	{
+                	hci_close_dev(device);
+                	perror( "Could not install signal handler\n" );
+                	return 0;
+        	}
+		alarm( timeout ); // set the alarm timer, when time is up the program will be terminated
+
+		if ( sigprocmask( SIG_UNBLOCK, &sigalrm_set, NULL ) != 0 )
+		{
+			hci_close_dev(device);
+			perror( "Could not unblock alarm signal" );
+			return 0;
+		}
 	}
 
 	// Keep scanning until the timeout is triggered or we have seen lots of advertisements.  Then exit.
@@ -245,6 +251,7 @@ int main(int argc, char **argv)
 			if ( meta_event->subevent == EVT_LE_ADVERTISING_REPORT )
 			{
 				count++;
+				printf("count = %d\n",count); //debug
 				if ( reset_timeout != 0 && timeout > 0 ) // reset/restart the alarm timer
 					alarm( timeout );
 
