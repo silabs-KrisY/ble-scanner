@@ -251,7 +251,6 @@ int main(int argc, char **argv)
 			if ( meta_event->subevent == EVT_LE_ADVERTISING_REPORT )
 			{
 				count++;
-				printf("count = %d\n",count); //debug
 				if ( reset_timeout != 0 && timeout > 0 ) // reset/restart the alarm timer
 					alarm( timeout );
 

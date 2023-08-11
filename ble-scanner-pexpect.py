@@ -44,7 +44,7 @@ with open('output.txt', 'w') as f:
 		if debug == 1:
 			print("Waiting random " + str(wait) + " seconds")
 		time.sleep(wait)
-		child = pexpect.spawn("sudo ./scanner -i 888 -w 88 -m 1C:34:F1:DE:25:74")
+		child = pexpect.spawn("sudo ./exe/scanner -i 178 -w 8 -m 1C:34:F1:DE:25:74")
 
 		i = child.expect([pexpect.TIMEOUT,"Using"], timeout=5)
 		if i == 0:
