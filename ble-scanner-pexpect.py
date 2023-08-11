@@ -76,7 +76,7 @@ with open('output.txt', 'w') as f:
 			continue
 		int_str = str_split[len(str_split)-2].decode('utf-8')
 		found_time = int(int_str)
-		pprint("Iteration #" + str(ITERATIONS-iteration+1) + ": Found time: " + str(found_time))
+		print("Iteration #" + str(ITERATIONS-iteration+1) + ": Found time: " + str(found_time))
 		print(found_time,file=f) # write to file
 		iteration=iteration-1
 
