@@ -41,11 +41,11 @@ void exit_clean()
 
 	// Disable scanning.
 
-	le_set_scan_enable_cp scan_cp;
+	le_set_ext_scan_enable_cp scan_cp;
 	memset(&scan_cp, 0, sizeof(scan_cp));
 	scan_cp.enable = 0x00;	// Disable flag.
 
-	struct hci_request disable_adv_rq = ble_hci_request(OCF_LE_SET_SCAN_ENABLE, LE_SET_SCAN_ENABLE_CP_SIZE, &status, &scan_cp);
+	struct hci_request disable_adv_rq = ble_hci_request(OCF_LE_SET_EXT_SCAN_ENABLE, LE_SET_EXT_SCAN_ENABLE_CP_SIZE, &status, &scan_cp);
 	ret = hci_send_req(device, &disable_adv_rq, 1000);
 	if ( ret < 0 )
 		perror(" ERROR: Failed to disable scan.");
@@ -141,16 +141,16 @@ int main(int argc, char **argv)
 
 	// Set BLE scan parameters.
 
-	le_set_scan_parameters_cp scan_params_cp;
+	le_set_ext_scan_params_cp scan_params_cp;
 	memset(&scan_params_cp, 0, sizeof(scan_params_cp));
-	scan_params_cp.type 			= active_scan;
-        scan_params_cp.interval                 = htobs(interval);
-        scan_params_cp.window                   = htobs(window);
+	scan_params_cp.own_bdaddr_type = 0x00; // Public Device Address (default).
+	scan_params_cp.filter = 0x00; // Accept all.
+	scan_params_cp.scanning_phys = 0x01; // 1M PHY
+	scan_params_cp.scan_type[0] = active_scan;
+	scan_params_cp.scan_interval[0] = htobs(interval);
+	scan_params_cp.scan_window[0] = htobs(window);
 
-	scan_params_cp.own_bdaddr_type 	= 0x00; // Public Device Address (default).
-	scan_params_cp.filter 			= 0x00; // Accept all.
-
-	struct hci_request scan_params_rq = ble_hci_request(OCF_LE_SET_SCAN_PARAMETERS, LE_SET_SCAN_PARAMETERS_CP_SIZE, &status, &scan_params_cp);
+	struct hci_request scan_params_rq = ble_hci_request(OCF_LE_SET_EXT_SCAN_PARAMETERS, LE_SET_EXT_SCAN_PARAMETERS_CP_SIZE, &status, &scan_params_cp);
 
 	ret = hci_send_req(device, &scan_params_rq, 1000);
 	if ( ret < 0 ) {
@@ -176,12 +176,14 @@ int main(int argc, char **argv)
 
 	// Enable scanning.
 
-	le_set_scan_enable_cp scan_cp;
+	le_set_ext_scan_enable_cp scan_cp;
 	memset(&scan_cp, 0, sizeof(scan_cp));
 	scan_cp.enable 		= 0x01;	// Enable flag.
 	scan_cp.filter_dup 	= 0x00; // Filtering disabled.
+	scan_cp.duration = 0;
+	scan_cp.period = 0;
 
-	struct hci_request enable_adv_rq = ble_hci_request(OCF_LE_SET_SCAN_ENABLE, LE_SET_SCAN_ENABLE_CP_SIZE, &status, &scan_cp);
+	struct hci_request enable_adv_rq = ble_hci_request(OCF_LE_SET_EXT_SCAN_ENABLE, LE_SET_EXT_SCAN_ENABLE_CP_SIZE, &status, &scan_cp);
 
 	ret = hci_send_req(device, &enable_adv_rq, 1000);
 	if ( ret < 0 ) {
@@ -206,7 +208,6 @@ int main(int argc, char **argv)
 
 	uint8_t buf[HCI_MAX_EVENT_SIZE];
 	evt_le_meta_event * meta_event;
-	le_advertising_info * info;
 	int len;
 	int count = 0;
         bool exit_while=false;
@@ -248,7 +249,9 @@ int main(int argc, char **argv)
 		if ( len >= HCI_EVENT_HDR_SIZE )
 		{
 			meta_event = (evt_le_meta_event*)(buf+HCI_EVENT_HDR_SIZE+1);
-			if ( meta_event->subevent == EVT_LE_ADVERTISING_REPORT )
+			if ( meta_event->subevent == EVT_LE_EXTENDED_ADVERTISING_REPORT &&
+			     len >= HCI_EVENT_HDR_SIZE + 2 && buf[1] >= 2 &&
+			     (size_t)len >= HCI_EVENT_HDR_SIZE + 1 + buf[1] )
 			{
 				count++;
 				if ( reset_timeout != 0 && timeout > 0 ) // reset/restart the alarm timer
@@ -256,27 +259,30 @@ int main(int argc, char **argv)
 
 				// print results
 				uint8_t reports_count = meta_event->data[0];
-				void * offset = meta_event->data + 1;
-				while ( reports_count-- )
+				uint8_t *offset = meta_event->data + 1;
+				uint8_t *end = buf + HCI_EVENT_HDR_SIZE + 1 + buf[1];
+				while ( reports_count-- && offset + 24 <= end )
 				{
-                                        info = (le_advertising_info *)offset;
+                                        uint8_t data_length = offset[23];
+                                        if (offset + 24 + data_length > end) break;
                                         if (target_bdaddr_flag==false) {
 					    char addr[18];
-					    ba2str( &(info->bdaddr), addr);
-					    printf("%s %d", addr, (int8_t)info->data[info->length]);
-					    for (int i = 0; i < info->length; i++)
-						printf(" %02X", (unsigned char)info->data[i]);
+				    ba2str((const bdaddr_t *)(offset + 3), addr);
+				    printf("%s %d", addr, (int8_t)offset[22]);
+				    for (int i = 0; i < data_length; i++)
+					printf(" %02X", offset[24 + i]);
 					    printf("\n");
-					    offset = info->data + info->length + 2;
+				    offset += 24 + data_length;
 				        } else {
                                             // look for target bdaddr and exit with timestamp when found
-                                            if (bacmp(&(info->bdaddr),&target_bdaddr) == 0) 
+                                            if (bacmp((const bdaddr_t *)(offset + 3),&target_bdaddr) == 0) 
                                             {
                                                gettimeofday(&stop, NULL);
                                                printf("target bdaddr found after %lu ms\r\n", (stop.tv_sec - start.tv_sec) * 1000 + (int)((stop.tv_usec - start.tv_usec) / 1000));
                                                exit_while = true;
                                                break;
                                              } 
+                                            offset += 24 + data_length;
                                          }
                                 }
 			}
