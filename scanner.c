@@ -15,6 +15,31 @@
 #include <sys/time.h>
 #include <getopt.h>
 #include <stdbool.h>
+#include <string.h>
+#include <stddef.h>
+
+// BlueZ 5.66 does not expose the extended scanning command definitions.
+#define OCF_LE_SET_EXT_SCAN_PARAMETERS 0x0041
+#define OCF_LE_SET_EXT_SCAN_ENABLE 0x0042
+#define EVT_LE_EXTENDED_ADVERTISING_REPORT 0x0D
+#define LE_SET_EXT_SCAN_PARAMETERS_CP_SIZE 8
+#define LE_SET_EXT_SCAN_ENABLE_CP_SIZE 6
+
+typedef struct __attribute__((packed)) {
+	uint8_t own_bdaddr_type;
+	uint8_t filter;
+	uint8_t scanning_phys;
+	uint8_t scan_type[2];
+	uint16_t scan_interval[2];
+	uint16_t scan_window[2];
+} le_set_ext_scan_params_cp;
+
+typedef struct __attribute__((packed)) {
+	uint8_t enable;
+	uint8_t filter_dup;
+	uint16_t duration;
+	uint16_t period;
+} le_set_ext_scan_enable_cp;
 
 #define SCAN_INTERVAL_DEFAULT 0x0010 //10ms (units of 0.625ms)
 #define SCAN_WINDOW_DEFAULT 0x0010 //10ms (units of 0.625ms)
