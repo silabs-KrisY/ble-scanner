@@ -67,6 +67,8 @@ typedef struct __attribute__((packed)) {
 
 int device;
 
+static volatile sig_atomic_t shutdown_requested = 0; /* sig ints set a flag that's handled in the main context */
+
 struct hci_request ble_hci_request(uint16_t ocf, int clen, void * status, void * cparam)
 {
 	struct hci_request rq;
@@ -80,12 +82,16 @@ struct hci_request ble_hci_request(uint16_t ocf, int clen, void * status, void *
 	return rq;
 }
 
-// cleanup and exit the program with exit code 0
-void exit_clean()
+static void signal_handler(int signal_number)
+{
+	(void)signal_number;
+	shutdown_requested = 1;
+}
+
+// Disable scanning and close the HCI device from normal code, not a signal handler.
+static void exit_clean(void)
 {
 	int ret, status;
-
-	// Disable scanning.
 
 	le_set_ext_scan_enable_cp scan_cp;
 	memset(&scan_cp, 0, sizeof(scan_cp));
@@ -97,16 +103,6 @@ void exit_clean()
 		perror(" ERROR: Failed to disable scan.");
 
 	hci_close_dev(device);
-	exit( 0 );
-}
-
-// handles timeout
-void signal_handler( int s )
-{
-	(void)s;
-	printf( "Exiting..\n" );
-	fflush(stdout);
-	exit_clean();
 }
 
 int main(int argc, char **argv)
@@ -263,34 +259,34 @@ int main(int argc, char **argv)
 	const int reset_timeout = 1; // wether to reset the timer on a received scan event (continuous scanning)
 	const int max_count = -1; // default to no max count
 
-	sigset_t sigalrm_set; // apparently the signal must be unblocked in some cases
-	sigemptyset ( &sigalrm_set );
-        sigaddset ( &sigalrm_set, SIGALRM );
-
-	// if timeout is <= 0, don't worry about the SIGALRM/timeout
-	if ( timeout > 0 )
-	{	// Install a signal handler so that we can set the exit code and clean up
-        	if ( signal( SIGALRM, signal_handler ) == SIG_ERR )
-        	{
-                	hci_close_dev(device);
-                	perror( "Could not install signal handler\n" );
-                	return 0;
-        	}
-		alarm( timeout ); // set the alarm timer, when time is up the program will be terminated
-
-		if ( sigprocmask( SIG_UNBLOCK, &sigalrm_set, NULL ) != 0 )
-		{
-			hci_close_dev(device);
-			perror( "Could not unblock alarm signal" );
-			return 0;
-		}
+	struct sigaction sa;
+	memset(&sa, 0, sizeof(sa));
+	sa.sa_handler = signal_handler;
+	sigemptyset(&sa.sa_mask);
+	if (sigaction(SIGINT, &sa, NULL) < 0 ||
+	    sigaction(SIGTERM, &sa, NULL) < 0 ||
+	    (timeout > 0 && sigaction(SIGALRM, &sa, NULL) < 0)) {
+		hci_close_dev(device);
+		perror(" ERROR: Could not install signal handlers");
+		return 1;
 	}
+
+	if ( timeout > 0 )
+		alarm(timeout);
 
 	// Keep scanning until the timeout is triggered or we have seen the max number of advertisements.  Then exit.
 	// We exit in this case because the scan may have failed or stopped. Higher level code can restart
-	while (( count < max_count || max_count <= 0 ) && (exit_while == false))
+	while (!shutdown_requested && (count < max_count || max_count <= 0) && !exit_while)
 	{
 		len = read(device, buf, sizeof(buf));
+		if (len < 0) {
+			if (errno == EINTR && shutdown_requested)
+				break;
+			if (errno == EINTR)
+				continue;
+			perror(" ERROR: Failed to read HCI event");
+			break;
+		}
 		if ( len >= HCI_EVENT_HDR_SIZE )
 		{
 			meta_event = (evt_le_meta_event*)(buf+HCI_EVENT_HDR_SIZE+1);
@@ -333,14 +329,9 @@ int main(int argc, char **argv)
 		}
 	}
 
-	// Prevent SIGALARM from firing during the clean up procedure
-	if ( sigprocmask( SIG_BLOCK, &sigalrm_set, NULL ) != 0 )
-	{
-		hci_close_dev(device);
-		perror( "Could not block alarm signal" );
-		return 0;
-	}
-
+	alarm(0);
+	if (shutdown_requested)
+		printf("Exiting..\n");
 	exit_clean();
 	return 0;
 }
