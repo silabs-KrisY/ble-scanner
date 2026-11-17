@@ -49,6 +49,22 @@ typedef struct __attribute__((packed)) {
 	uint16_t period;
 } __attribute__((packed)) le_set_ext_scan_enable_cp;
 
+ typedef struct {
+    uint16_t event_type;
+    uint8_t  addr_type;
+    bdaddr_t addr;
+    uint8_t  primary_phy;
+    uint8_t  secondary_phy;
+    uint8_t  adv_sid;
+    int8_t   tx_power;
+    int8_t   rssi;
+    uint16_t periodic_adv_interval;
+    uint8_t  direct_addr_type;
+    bdaddr_t direct_addr;
+    uint8_t  data_len;
+    uint8_t  data[0];
+} __attribute__((packed)) le_ext_adv_report_info_t;
+
 int device;
 
 struct hci_request ble_hci_request(uint16_t ocf, int clen, void * status, void * cparam)
@@ -290,17 +306,17 @@ int main(int argc, char **argv)
 				uint8_t *end = buf + HCI_EVENT_HDR_SIZE + 1 + buf[1];
 				while ( reports_count-- && offset + 24 <= end )
 				{
-					uint8_t data_length = offset[23];
-					if (offset + 24 + data_length > end) break;
+					le_ext_adv_report_info_t *info = (le_ext_adv_report_info_t *)offset;
+					if (offset + 24 + info->data_len > end) break;
 					if (target_bdaddr_flag==false) {
 						/* Print BDADDR from all adv reports */
 					    char addr[18];
-						ba2str((const bdaddr_t *)(offset + 3), addr);
-						printf("BDADDR: %s  RSSI: %d  ADV PL: ", addr, (int8_t)offset[13]);
-						for (int i = 0; i < data_length; i++)
-							printf(" %02X", offset[24 + i]);
+						ba2str(&info->addr, addr);
+						printf("BDADDR: %s  RSSI: %d  ADV LEN: %d  ADV PL: ", addr,  info->rssi, info->data_len);
+						for (int i = 0; i < info->data_len; i++)
+							printf(" %02X", info->data[i]);
 					    printf("\n");
-				    	offset += 24 + data_length;
+				    	offset += 24 + info->data_len;
 					} else {
 						// look for target bdaddr and exit with elapsed time printed when found
 						if (bacmp((const bdaddr_t *)(offset + 3),&target_bdaddr) == 0) 
@@ -310,7 +326,7 @@ int main(int argc, char **argv)
 							exit_while = true;
 							break;
 						} 
-						offset += 24 + data_length;
+						offset += 24 + info->data_len;
 					}
                 }
 			}
