@@ -44,7 +44,7 @@ typedef struct __attribute__((packed)) {
 	uint16_t period;
 } __attribute__((packed)) le_set_ext_scan_enable_cp;
 
-#define SCAN_INTERVAL_DEFAULT 0x0010 //10ms (units of 0.625ms)
+#define SCAN_INTERVAL_DEFAULT 0x0050 //50ms (units of 0.625ms)
 #define SCAN_WINDOW_DEFAULT 0x0010 //10ms (units of 0.625ms)
 
 int device;
@@ -85,6 +85,7 @@ void exit_clean()
 // handles timeout
 void signal_handler( int s )
 {
+	(void)s;
 	printf( "Exiting..\n" );
 	fflush(stdout);
 	exit_clean();
@@ -277,9 +278,7 @@ int main(int argc, char **argv)
 		if ( len >= HCI_EVENT_HDR_SIZE )
 		{
 			meta_event = (evt_le_meta_event*)(buf+HCI_EVENT_HDR_SIZE+1);
-			if ( meta_event->subevent == EVT_LE_EXTENDED_ADVERTISING_REPORT &&
-			     len >= HCI_EVENT_HDR_SIZE + 2 && buf[1] >= 2 &&
-			     (size_t)len >= HCI_EVENT_HDR_SIZE + 1 + buf[1] )
+			if ( meta_event->subevent == EVT_LE_EXTENDED_ADVERTISING_REPORT )
 			{
 				count++;
 				if ( reset_timeout != 0 && timeout > 0 ) // reset/restart the alarm timer
@@ -291,28 +290,29 @@ int main(int argc, char **argv)
 				uint8_t *end = buf + HCI_EVENT_HDR_SIZE + 1 + buf[1];
 				while ( reports_count-- && offset + 24 <= end )
 				{
-                                        uint8_t data_length = offset[23];
-                                        if (offset + 24 + data_length > end) break;
-                                        if (target_bdaddr_flag==false) {
+					uint8_t data_length = offset[23];
+					if (offset + 24 + data_length > end) break;
+					if (target_bdaddr_flag==false) {
+						/* Print BDADDR from all adv reports */
 					    char addr[18];
-				    ba2str((const bdaddr_t *)(offset + 3), addr);
-				    printf("%s %d", addr, (int8_t)offset[22]);
-				    for (int i = 0; i < data_length; i++)
-					printf(" %02X", offset[24 + i]);
+						ba2str((const bdaddr_t *)(offset + 3), addr);
+						printf("%s %d", addr, (int8_t)offset[22]);
+						for (int i = 0; i < data_length; i++)
+							printf(" %02X", offset[24 + i]);
 					    printf("\n");
-				    offset += 24 + data_length;
-				        } else {
-                                            // look for target bdaddr and exit with timestamp when found
-                                            if (bacmp((const bdaddr_t *)(offset + 3),&target_bdaddr) == 0) 
-                                            {
-                                               gettimeofday(&stop, NULL);
-                                               printf("target bdaddr found after %lu ms\r\n", (stop.tv_sec - start.tv_sec) * 1000 + (int)((stop.tv_usec - start.tv_usec) / 1000));
-                                               exit_while = true;
-                                               break;
-                                             } 
-                                            offset += 24 + data_length;
-                                         }
-                                }
+				    	offset += 24 + data_length;
+					} else {
+						// look for target bdaddr and exit with timestamp print when found
+						if (bacmp((const bdaddr_t *)(offset + 3),&target_bdaddr) == 0) 
+						{
+							gettimeofday(&stop, NULL);
+							printf("target bdaddr found after %lu ms\r\n", (stop.tv_sec - start.tv_sec) * 1000 + (int)((stop.tv_usec - start.tv_usec) / 1000));
+							exit_while = true;
+							break;
+						} 
+						offset += 24 + data_length;
+					}
+                }
 			}
 		}
 	}
