@@ -22,24 +22,27 @@
 #define OCF_LE_SET_EXT_SCAN_PARAMETERS 0x0041
 #define OCF_LE_SET_EXT_SCAN_ENABLE 0x0042
 #define EVT_LE_EXTENDED_ADVERTISING_REPORT 0x0D
-#define LE_SET_EXT_SCAN_PARAMETERS_CP_SIZE 8
-#define LE_SET_EXT_SCAN_ENABLE_CP_SIZE 6
+
+/* Packed command structures per Bluetooth Core Spec */
+typedef struct {
+    uint8_t  scan_type;
+    uint16_t scan_interval;
+    uint16_t scan_window;
+} __attribute__((packed)) le_ext_scan_phy_params_t;
 
 typedef struct __attribute__((packed)) {
 	uint8_t own_bdaddr_type;
 	uint8_t filter;
 	uint8_t scanning_phys;
-	uint8_t scan_type[2];
-	uint16_t scan_interval[2];
-	uint16_t scan_window[2];
-} le_set_ext_scan_params_cp;
+	le_ext_scan_phy_params_t phy_1m; /* For 1M PHY (bit 0 of scanning_phys) */
+} __attribute__((packed)) le_set_ext_scan_params_cp_t;
 
 typedef struct __attribute__((packed)) {
 	uint8_t enable;
 	uint8_t filter_dup;
 	uint16_t duration;
 	uint16_t period;
-} le_set_ext_scan_enable_cp;
+} __attribute__((packed)) le_set_ext_scan_enable_cp;
 
 #define SCAN_INTERVAL_DEFAULT 0x0010 //10ms (units of 0.625ms)
 #define SCAN_WINDOW_DEFAULT 0x0010 //10ms (units of 0.625ms)
@@ -70,7 +73,7 @@ void exit_clean()
 	memset(&scan_cp, 0, sizeof(scan_cp));
 	scan_cp.enable = 0x00;	// Disable flag.
 
-	struct hci_request disable_adv_rq = ble_hci_request(OCF_LE_SET_EXT_SCAN_ENABLE, LE_SET_EXT_SCAN_ENABLE_CP_SIZE, &status, &scan_cp);
+	struct hci_request disable_adv_rq = ble_hci_request(OCF_LE_SET_EXT_SCAN_ENABLE, sizeof(scan_cp), &status, &scan_cp);
 	ret = hci_send_req(device, &disable_adv_rq, 1000);
 	if ( ret < 0 )
 		perror(" ERROR: Failed to disable scan.");
@@ -166,16 +169,16 @@ int main(int argc, char **argv)
 
 	// Set BLE scan parameters.
 
-	le_set_ext_scan_params_cp scan_params_cp;
+	le_set_ext_scan_params_cp_t scan_params_cp;
 	memset(&scan_params_cp, 0, sizeof(scan_params_cp));
 	scan_params_cp.own_bdaddr_type = 0x00; // Public Device Address (default).
 	scan_params_cp.filter = 0x00; // Accept all.
 	scan_params_cp.scanning_phys = 0x01; // 1M PHY
-	scan_params_cp.scan_type[0] = active_scan;
-	scan_params_cp.scan_interval[0] = htobs(interval);
-	scan_params_cp.scan_window[0] = htobs(window);
+	scan_params_cp.phy_1m.scan_type = active_scan;
+	scan_params_cp.phy_1m.scan_interval = htobs(interval);
+	scan_params_cp.phy_1m.scan_window = htobs(window);
 
-	struct hci_request scan_params_rq = ble_hci_request(OCF_LE_SET_EXT_SCAN_PARAMETERS, LE_SET_EXT_SCAN_PARAMETERS_CP_SIZE, &status, &scan_params_cp);
+	struct hci_request scan_params_rq = ble_hci_request(OCF_LE_SET_EXT_SCAN_PARAMETERS, sizeof(scan_params_cp), &status, &scan_params_cp);
 
 	ret = hci_send_req(device, &scan_params_rq, 1000);
 	if ( ret < 0 ) {
@@ -208,7 +211,7 @@ int main(int argc, char **argv)
 	scan_cp.duration = 0;
 	scan_cp.period = 0;
 
-	struct hci_request enable_adv_rq = ble_hci_request(OCF_LE_SET_EXT_SCAN_ENABLE, LE_SET_EXT_SCAN_ENABLE_CP_SIZE, &status, &scan_cp);
+	struct hci_request enable_adv_rq = ble_hci_request(OCF_LE_SET_EXT_SCAN_ENABLE, sizeof(scan_cp), &status, &scan_cp);
 
 	ret = hci_send_req(device, &enable_adv_rq, 1000);
 	if ( ret < 0 ) {
