@@ -18,10 +18,15 @@
 #include <string.h>
 #include <stddef.h>
 
-// BlueZ 5.66 does not expose the extended scanning command definitions.
+// BlueZ 5.66 does not expose the extended scanning command definitions
+// so we are manually #defining them
 #define OCF_LE_SET_EXT_SCAN_PARAMETERS 0x0041
 #define OCF_LE_SET_EXT_SCAN_ENABLE 0x0042
 #define EVT_LE_EXTENDED_ADVERTISING_REPORT 0x0D
+
+// Default extended scan parameters
+#define SCAN_INTERVAL_DEFAULT 0x0010 //10ms (units of 0.625ms)
+#define SCAN_WINDOW_DEFAULT 0x0010 //10ms (units of 0.625ms)
 
 /* Packed command structures per Bluetooth Core Spec */
 typedef struct {
@@ -43,9 +48,6 @@ typedef struct __attribute__((packed)) {
 	uint16_t duration;
 	uint16_t period;
 } __attribute__((packed)) le_set_ext_scan_enable_cp;
-
-#define SCAN_INTERVAL_DEFAULT 0x0050 //50ms (units of 0.625ms)
-#define SCAN_WINDOW_DEFAULT 0x0010 //10ms (units of 0.625ms)
 
 int device;
 
@@ -95,7 +97,7 @@ int main(int argc, char **argv)
 {
 	int ret, status;
 	bdaddr_t target_bdaddr;
-        bool target_bdaddr_flag=false;
+	bool target_bdaddr_flag=false;
 	int interval=SCAN_INTERVAL_DEFAULT;
 	int window=SCAN_WINDOW_DEFAULT;
 	int active_scan=0; //default to passive scan
@@ -108,29 +110,29 @@ int main(int argc, char **argv)
             switch (c)
 	    {
 	        case 'i':
-		    interval = atoi(optarg);
-                    printf("interval=%d ms\r\n", (int)(interval*0.625));
-                    break;
-                case 'w':
-		    window = atoi(optarg);
-                    printf("window=%d ms\r\n", (int)(window*0.625));
-                    break;
-                 case 'm':
-		    status=str2ba(optarg,&target_bdaddr);
-                    if (status < 0) {
-                        perror(" ERROR: error in bdaddr conversion!");
-                        return 0;
-                    } else {
-                        char addr[18];
-                        ba2str(&target_bdaddr, addr);
-                        printf("target addr: %s\r\n", addr);
-                        target_bdaddr_flag=true;
-                    }
-                    break;
-                  case 'a':
-                    active_scan=0x01; //select active scan
-                    printf("performing active scan\r\n");
-                    break;
+		    	interval = atoi(optarg);
+				printf("interval=%d ms\r\n", (int)(interval*0.625));
+				break;
+			case 'w':
+		    	window = atoi(optarg);
+				printf("window=%d ms\r\n", (int)(window*0.625));
+				break;
+			case 'm':
+		    	status=str2ba(optarg,&target_bdaddr);
+				if (status < 0) {
+					perror(" ERROR: error in bdaddr conversion!");
+					return 0;
+				} else {
+					char addr[18];
+					ba2str(&target_bdaddr, addr);
+					printf("target addr: %s\r\n", addr);
+					target_bdaddr_flag=true;
+				}
+				break;
+			case 'a':
+				active_scan=0x01; //select active scan
+				printf("performing active scan\r\n");
+				break;
               }
           }
 
@@ -234,18 +236,16 @@ int main(int argc, char **argv)
 		return 0;
 	}
 
-
 	uint8_t buf[HCI_MAX_EVENT_SIZE];
 	evt_le_meta_event * meta_event;
 	int len;
 	int count = 0;
-        bool exit_while=false;
+	bool exit_while=false;
 
-	//const int timeout = 10;
-	const int timeout = 0; // no timeout
+
+	const int timeout = 0; // default to no timeout
 	const int reset_timeout = 1; // wether to reset the timer on a received scan event (continuous scanning)
-	//const int max_count = 1000;
-	const int max_count = -1; // no max count
+	const int max_count = -1; // default to no max count
 
 	sigset_t sigalrm_set; // apparently the signal must be unblocked in some cases
 	sigemptyset ( &sigalrm_set );
@@ -270,7 +270,7 @@ int main(int argc, char **argv)
 		}
 	}
 
-	// Keep scanning until the timeout is triggered or we have seen lots of advertisements.  Then exit.
+	// Keep scanning until the timeout is triggered or we have seen the max number of advertisements.  Then exit.
 	// We exit in this case because the scan may have failed or stopped. Higher level code can restart
 	while (( count < max_count || max_count <= 0 ) && (exit_while == false))
 	{
@@ -296,13 +296,13 @@ int main(int argc, char **argv)
 						/* Print BDADDR from all adv reports */
 					    char addr[18];
 						ba2str((const bdaddr_t *)(offset + 3), addr);
-						printf("%s %d", addr, (int8_t)offset[22]);
+						printf("BDADDR: %s  RSSI: %d  ADV PL: ", addr, (int8_t)offset[13]);
 						for (int i = 0; i < data_length; i++)
 							printf(" %02X", offset[24 + i]);
 					    printf("\n");
 				    	offset += 24 + data_length;
 					} else {
-						// look for target bdaddr and exit with timestamp print when found
+						// look for target bdaddr and exit with elapsed time printed when found
 						if (bacmp((const bdaddr_t *)(offset + 3),&target_bdaddr) == 0) 
 						{
 							gettimeofday(&stop, NULL);
